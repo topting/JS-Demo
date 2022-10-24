@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.2.40/vue.global.js"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/element-plus/2.2.17/index.min.css" rel="stylesheet">
+    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus/2.2.17/index.full.min.js"></script>
+    <style>
+        :root {
+            --border-color: #ebeef5;
+            --color: #1989fa;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+        }
+
+        .bar {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .bar .el-select {
+            width: 100px;
+            margin-right: 16px;
+            text-align: center;
+        }
+
+        .bar .el-select .el-input__inner {
+            text-align: center;
+        }
+
+        .bar .el-button-group {
+            margin-right: 16px;
+        }
+
+        .panel {
+            margin: 0 20px 20px 20px;
+            border-width: 0 0 1px 1px;
+            border-style: solid;
+            border-color: var(--border-color);
+        }
+
+        .week-panel {
+            display: flex;
+        }
+
+        .week-panel .week {
+            height: 40px;
+            line-height: 40px;
+            flex: 1;
+            text-align: center;
+            border-width: 1px 1px 0 0;
+            border-style: solid;
+            border-color: var(--border-color);
+        }
+
+        .day-panel .day-row {
+            display: flex;
+            height: calc((100vh - 80px - 40px - 20px) / 6);
+        }
+
+        .day-panel .day-row .day {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            border-width: 1px 1px 0 0;
+            border-style: solid;
+            border-color: var(--border-color);
+            cursor: pointer;
+        }
+
+        .day-panel .day-row .day:hover {
+            background: #ecf5ff;
+            color: var(--color);
+        }
+
+        .day-panel .day-row .day .txt {
+            width: 50px;
+            height: 50px;
+            line-height: 50px;
+            text-align: center;
+            border-radius: 50%;
+        }
+
+        .day-panel .day-row .day.selected {
+            background: none;
+        }
+
+        .day-panel .day-row .day.selected .txt {
+            background: var(--color);
+            color: #fff;
+            font-weight: 600;
+            font-size: 24px;
+        }
+        .day.not-current {
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+<div id="calendar">
+    <div class="bar">
+        <el-select v-model="currentYear" @change="changeYear">
+            <el-option
+                    v-for="(year, index) in yearList"
+                    :key="index"
+                    :label="`${year}年`"
+                    :value="year"/>
+        </el-select>
+        <el-select v-model="currentMonth" @change="changeMonth">
+            <el-option
+                    v-for="(month, index) in monthList"
+                    :key="index"
+                    :label="`${month}月`"
+                    :value="month"/>
+        </el-select>
+        <el-button-group>
+            <el-button color="#626aef" @click="toggleYear('prev')">上一年</el-button>
+            <el-button color="#626aef" @click="toggleYear('next')">下一年</el-button>
+            <el-button color="#626aef" @click="toggleMonth('prev')">上个月</el-button>
+            <el-button color="#626aef" @click="toggleMonth('next')">下个月</el-button>
+        </el-button-group>
+        <el-button type="primary" @click="goToday">回到今日</el-button>
+    </div>
+    <div class="panel">
+        <div class="week-panel">
+            <div class="week" v-for="(week, idx) in weekList" :key="index">{{week.label}}</div>
+        </div>
+        <div class="day-panel">
+            <div class="day-row" v-for="(dayRow, rowIdx) in dayList" :key="rowIdx">
+                <div class="day"
+                     :class="{
+                     'not-current': day.month !== currentMonth,
+                     'selected': day.date === currentDate && day.month === currentMonth && day.year === currentYear
+                     }"
+                     v-for="(day, idx) in dayRow"
+                     :key="idx"
+                     @click="toggleDay(day)">
+                    <span class="txt">{{day.date}}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+<script>
+    const {createApp} = Vue
+
+    const START_YEAR = 1900
+    const nowDate = new Date()
+    const App = {
+        data() {
+            return {
+                yearList: [],
+                monthList: [],
+                dayList: [],
+                weekList: [
+                    {
+                        label: '星期日',
+                        val: 0,
+                    },
+                    {
+                        label: '星期一',
+                        val: 1,
+                    },
+                    {
+                        label: '星期二',
+                        val: 2,
+                    },
+                    {
+                        label: '星期三',
+                        val: 3,
+                    },
+                    {
+                        label: '星期四',
+                        val: 4,
+                    },
+                    {
+                        label: '星期五',
+                        val: 5,
+                    },
+                    {
+                        label: '星期六',
+                        val: 6,
+                    }
+                ],
+                currentYear: '',
+                currentMonth: '',
+                currentDate: ''
+            }
+        },
+        created() {
+            this.generateYear()
+            this.generateMonth()
+            this.generateDay()
+        },
+        methods: {
+            // 生成年份选项
+            generateYear() {
+                let yearLength = 150
+                const arr = []
+                do {
+                    arr.push(START_YEAR + yearLength)
+                    yearLength--
+                } while (yearLength > 0)
+
+                this.yearList = arr.reverse()
+                this.yearList.unshift(START_YEAR)
+                this.currentYear = nowDate.getFullYear()
+            },
+
+            // 生成月份选项
+            generateMonth() {
+                const arr = []
+                let month = 1
+
+                do {
+                    arr.push(month)
+                    month++
+                } while (month < 13)
+
+                this.monthList = arr
+                this.currentMonth = nowDate.getMonth() + 1
+            },
+
+            // 生成当前月的日期
+            generateDay() {
+                let prevMonth = []
+                let nextMonth = []
+                let month = new Array(6).fill([])
+
+                let minDay = 1 // 当月第一天
+                let maxDay = new Date(this.currentYear, this.currentMonth, 0).getDate() // 当月最后一天
+                const weekIndex = new Date(this.currentYear, this.currentMonth - 1, minDay).getDay() // 1号在周几
+                let beginDate = - (weekIndex) + 1 // 开始日期，如本月1号是周六，那么开始日期则是 -6
+
+                this.dayList = []
+                month.forEach((row, rowIdx) => {
+                    row = new Array(7).fill('').map((day, dateIdx) => {
+                        day = {
+                            year: '',
+                            month: '',
+                            date: ''
+                        }
+                        switch (true) {
+                            case beginDate < 1: // 上月
+                                day.year = this.currentYear
+                                day.month = this.currentMonth - 1
+                                day.date = new Date(this.currentYear, this.currentMonth - 2, beginDate).getDate()
+                                break
+                            case beginDate > maxDay: // 下月
+                                day.year = this.currentYear
+                                day.month = this.currentMonth + 1
+                                day.date = new Date(this.currentYear, this.currentMonth, beginDate).getDate()
+                                break
+                            default: // 本月
+                                day.year = this.currentYear
+                                day.month = this.currentMonth
+                                day.date = new Date(this.currentYear, this.currentMonth - 1, beginDate).getDate()
+                                break
+                        }
+                        beginDate++
+                        return day
+                    })
+                    this.dayList.push(row)
+                })
+            },
+
+            //  切换年份
+            changeYear() {
+              this.generateDay()
+            },
+
+            // 切换月份
+            changeMonth() {
+                this.generateDay()
+            },
+
+            // 切换选中日期
+            toggleDay(day) {
+                this.currentDate = day.date
+            },
+            // 上一年 / 下一年
+            toggleYear(type) {
+                if (type === 'next') {
+                    const lastYear = this.yearList.slice(-1)[0]
+                    this.currentYear = this.currentYear < lastYear ? ++this.currentYear : this.currentYear
+                } else {
+                    const firstYear = this.yearList.slice(0)[0]
+                    this.currentYear = this.currentYear > firstYear ? --this.currentYear : this.currentYear
+                }
+                this.generateDay()
+            },
+
+            // 上一月 / 下一月
+            toggleMonth(type) {
+                if (type === 'next') {
+                    this.currentMonth = this.currentMonth < 12 ? ++this.currentMonth : this.currentMonth
+                } else {
+                    this.currentMonth = this.currentMonth > 1 ? --this.currentMonth : this.currentMonth
+                }
+                this.generateDay()
+            },
+
+            // 回到今天
+            goToday() {
+                this.currentYear = nowDate.getFullYear()
+                this.currentMonth = nowDate.getMonth() + 1
+                this.currentDate = nowDate.getDate()
+                this.generateDay()
+            }
+        }
+    }
+
+    createApp(App)
+        .use(ElementPlus)
+        .mount('#calendar')
+</script>
+</html>
